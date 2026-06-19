@@ -1,0 +1,8 @@
+{
+  "device": "esp32c3-epaper-nfc-display",
+  "version": "1.1.0",
+  "build": "2026-06-19",
+  "notes": "測試 GitHub manifest 新版本提示。",
+  "firmware_url": "",
+  "sha256": ""
+}
