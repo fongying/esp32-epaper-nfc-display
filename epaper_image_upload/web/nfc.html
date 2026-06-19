@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NFC 綁定管理</title>
+  <style>
+    :root {
+      --bg:#fbf8f2;
+      --panel:#ffffff;
+      --ink:#18181b;
+      --muted:#5f6673;
+      --line:#e7dfd2;
+      --accent:#0ea5a3;
+      --danger:#d10f1f;
+      --cream:#fffdf7;
+    }
+    * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
+    html { color-scheme:light; }
+    body {
+      margin:0;
+      min-height:100vh;
+      background:
+        linear-gradient(90deg, rgba(24,24,27,.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(24,24,27,.035) 1px, transparent 1px),
+        var(--bg);
+      background-size:24px 24px;
+      color:var(--ink);
+      font-family:"Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;
+      letter-spacing:0;
+    }
+    button, a { font:inherit; }
+    a { color:inherit; text-decoration:none; }
+    button, .nav-link {
+      border:1px solid var(--ink);
+      border-radius:8px;
+      min-height:40px;
+      padding:9px 12px;
+      background:var(--panel);
+      color:var(--ink);
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      transition:background-color .18s ease, color .18s ease, border-color .18s ease;
+    }
+    button:hover, .nav-link:hover { background:var(--cream); }
+    button:focus-visible, .nav-link:focus-visible {
+      outline:3px solid rgba(14,165,163,.28);
+      outline-offset:2px;
+    }
+    button.primary { background:var(--ink); color:#fff; }
+    button.danger { border-color:var(--danger); color:var(--danger); }
+    .app {
+      width:min(1180px, calc(100vw - 32px));
+      min-height:100dvh;
+      margin:0 auto;
+      padding:16px 0;
+      display:grid;
+      grid-template-rows:auto 1fr;
+      gap:16px;
+    }
+    .topbar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:rgba(255,255,255,.92);
+      padding:14px 16px;
+    }
+    .brand h1 { margin:0; font-size:24px; line-height:1.2; }
+    .brand p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .actions { display:flex; gap:8px; flex-wrap:wrap; }
+    .workspace {
+      display:grid;
+      grid-template-columns:330px minmax(0, 1fr);
+      gap:16px;
+      align-items:stretch;
+    }
+    .panel {
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:rgba(255,255,255,.94);
+      padding:16px;
+      min-width:0;
+    }
+    .stack { display:grid; gap:14px; align-content:start; }
+    .summary-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .metric {
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:var(--cream);
+      padding:12px;
+      min-height:82px;
+    }
+    .metric > span {
+      display:block;
+      color:var(--muted);
+      font-size:12px;
+      margin-bottom:7px;
+    }
+    .metric strong {
+      display:block;
+      font-size:24px;
+      line-height:1.1;
+    }
+    .metric strong span { display:inline; }
+    .uid-box {
+      border:1px solid #b9eadb;
+      border-radius:8px;
+      background:#f1fffa;
+      padding:12px;
+    }
+    .uid-box span { color:var(--muted); font-size:13px; }
+    .uid-value {
+      display:block;
+      margin-top:8px;
+      min-height:32px;
+      overflow-wrap:anywhere;
+      font-family:"Consolas","Courier New",monospace;
+      font-size:22px;
+      font-weight:800;
+      color:#075e54;
+    }
+    .list-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom:12px;
+    }
+    .list-head h2 { margin:0; font-size:18px; }
+    .binding-list { display:grid; gap:10px; }
+    .binding-card {
+      display:grid;
+      grid-template-columns:minmax(128px, .7fr) minmax(170px, 1fr) 98px 86px 86px;
+      align-items:center;
+      gap:10px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:#fff;
+      padding:12px;
+    }
+    .binding-uid {
+      font-family:"Consolas","Courier New",monospace;
+      font-weight:800;
+      overflow-wrap:anywhere;
+    }
+    .binding-meta {
+      color:var(--muted);
+      font-size:13px;
+      text-align:right;
+    }
+    .note-box {
+      display:grid;
+      grid-template-columns:minmax(0, 1fr) 92px;
+      gap:8px;
+      align-items:center;
+    }
+    .note-input {
+      width:100%;
+      min-height:40px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      padding:8px 10px;
+      background:#fff;
+      color:var(--ink);
+    }
+    .empty {
+      min-height:220px;
+      display:grid;
+      place-items:center;
+      border:1px dashed var(--line);
+      border-radius:8px;
+      color:var(--muted);
+      text-align:center;
+      padding:18px;
+      line-height:1.6;
+    }
+    .status {
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:var(--cream);
+      color:var(--ink);
+      padding:10px 12px;
+      font-size:13px;
+      line-height:1.5;
+    }
+    @media (max-width: 820px) {
+      .app { width:min(100vw - 16px, 560px); padding:8px 0 18px; gap:10px; }
+      .topbar { align-items:stretch; flex-direction:column; }
+      .actions { display:grid; grid-template-columns:1fr 1fr; }
+      .workspace { grid-template-columns:1fr; gap:10px; }
+      .panel { padding:12px; }
+      .summary-grid { grid-template-columns:1fr 1fr; }
+      .binding-card { grid-template-columns:1fr; align-items:start; }
+      .binding-meta { text-align:left; }
+      .note-box { grid-template-columns:1fr; width:100%; }
+      .binding-card button { width:100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>NFC 綁定管理</h1>
+        <p>最多保留 20 張卡片圖片，刪除不用的 UID 可釋放空間。</p>
+      </div>
+      <nav class="actions" aria-label="頁面操作">
+        <a id="backDesigner" class="nav-link" href="/">回設計器</a>
+        <button id="refresh" type="button" class="primary">重新整理</button>
+      </nav>
+    </header>
+
+    <div class="workspace">
+      <section class="panel stack">
+        <div class="summary-grid">
+          <div class="metric">
+            <span>已綁定</span>
+            <strong><span id="count">0</span>/<span id="max">20</span></strong>
+          </div>
+          <div class="metric">
+            <span>儲存空間</span>
+            <strong id="storage">--</strong>
+          </div>
+        </div>
+
+        <!-- 即時 UID 區：刷卡後主程式會更新 /uid，這裡只負責顯示與協助確認目前卡片。 -->
+        <div class="uid-box">
+          <span>最後讀取 UID</span>
+          <strong id="lastUid" class="uid-value">尚未讀卡</strong>
+          <p id="uidStatus" class="status">等待 NFC 模組。</p>
+        </div>
+
+        <div class="status" id="status">載入中。</div>
+      </section>
+
+      <section class="panel">
+        <div class="list-head">
+          <h2>已綁定卡片</h2>
+          <span id="listHint" class="status">--</span>
+        </div>
+        <div id="bindings" class="binding-list"></div>
+        <div id="empty" class="empty" hidden>
+          尚未建立任何 NFC 綁定。<br>
+          回到設計器刷卡後，按「綁定目前畫布」即可新增。
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const localPreview = location.protocol === 'file:';
+    if (localPreview) document.getElementById('backDesigner').setAttribute('href', 'index.html');
+    const countEl = document.getElementById('count');
+    const maxEl = document.getElementById('max');
+    const storageEl = document.getElementById('storage');
+    const lastUidEl = document.getElementById('lastUid');
+    const uidStatusEl = document.getElementById('uidStatus');
+    const statusEl = document.getElementById('status');
+    const listHintEl = document.getElementById('listHint');
+    const bindingsEl = document.getElementById('bindings');
+    const emptyEl = document.getElementById('empty');
+
+    function formatBytes(bytes) {
+      if (!Number.isFinite(bytes)) return '--';
+      if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+      if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+      return `${bytes} B`;
+    }
+
+    function modeLabel(mode) {
+      return mode === 'bwr' ? '黑白紅' : '黑白';
+    }
+
+    function mockBindings() {
+      return {
+        max:20,
+        count:3,
+        used:90003,
+        total:1318001,
+        items:[
+          { uid:'E7161D64', bytes:30001, mode:'bwr', note:'展示卡' },
+          { uid:'90454D54', bytes:15001, mode:'bw', note:'門禁卡' },
+          { uid:'77828DD0', bytes:30001, mode:'bwr', note:'' }
+        ]
+      };
+    }
+
+    async function fetchJson(path) {
+      const res = await fetch(path, { cache:'no-store' });
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      return res.json();
+    }
+
+    // 重新讀取清單。實機走 ESP32 API；本機 file:// 預覽使用假資料，方便檢查手機與桌面排版。
+    async function loadBindings() {
+      try {
+        const data = localPreview ? mockBindings() : await fetchJson('/bindings');
+        countEl.textContent = data.count;
+        maxEl.textContent = data.max;
+        storageEl.textContent = `${formatBytes(data.used)} / ${formatBytes(data.total)}`;
+        listHintEl.textContent = data.count >= data.max ? '已達上限' : `還可新增 ${data.max - data.count} 張`;
+        renderBindings(data.items || []);
+        statusEl.textContent = localPreview ? '目前是本機預覽，燒入後會讀取 ESP32 LittleFS。' : '清單已更新。';
+      } catch (err) {
+        statusEl.textContent = `讀取清單失敗：${err.message}`;
+      }
+    }
+
+    async function loadUid() {
+      if (localPreview) {
+        lastUidEl.textContent = '本機預覽';
+        uidStatusEl.textContent = '燒入 ESP32 後，刷卡 UID 會顯示在這裡。';
+        return;
+      }
+      try {
+        const data = await fetchJson('/uid');
+        lastUidEl.textContent = data.uid || '尚未讀卡';
+        uidStatusEl.textContent = data.status || (data.ready ? 'NFC 已就緒' : 'NFC 未就緒');
+      } catch (err) {
+        uidStatusEl.textContent = `讀取 UID 失敗：${err.message}`;
+      }
+    }
+
+    function renderBindings(items) {
+      bindingsEl.replaceChildren();
+      emptyEl.hidden = items.length !== 0;
+      for (const item of items) {
+        const card = document.createElement('article');
+        card.className = 'binding-card';
+
+        const uid = document.createElement('div');
+        uid.className = 'binding-uid';
+        uid.textContent = item.uid;
+
+        const meta = document.createElement('div');
+        meta.className = 'binding-meta';
+        meta.textContent = `${modeLabel(item.mode)} · ${formatBytes(item.bytes)}`;
+
+        const noteBox = document.createElement('div');
+        noteBox.className = 'note-box';
+        const noteInput = document.createElement('input');
+        noteInput.className = 'note-input';
+        noteInput.type = 'text';
+        noteInput.maxLength = 64;
+        noteInput.placeholder = '輸入註解，例如：學生證、門禁卡';
+        noteInput.value = item.note || '';
+        const save = document.createElement('button');
+        save.type = 'button';
+        save.textContent = '儲存註解';
+        save.addEventListener('click', () => saveNote(item.uid, noteInput.value));
+        noteBox.append(noteInput, save);
+
+        const show = document.createElement('button');
+        show.type = 'button';
+        show.className = 'primary';
+        show.textContent = 'Show';
+        show.addEventListener('click', () => showBinding(item.uid));
+
+        const del = document.createElement('button');
+        del.className = 'danger';
+        del.type = 'button';
+        del.textContent = '刪除';
+        del.addEventListener('click', () => deleteBinding(item.uid));
+
+        card.append(uid, noteBox, meta, show, del);
+        bindingsEl.append(card);
+      }
+    }
+
+    async function showBinding(uid) {
+      if (localPreview) {
+        statusEl.textContent = `本機預覽不會真的顯示 ${uid} 到電子紙。`;
+        return;
+      }
+      try {
+        statusEl.textContent = `正在顯示 UID ${uid} 的圖片到電子紙。`;
+        const res = await fetch(`/show?uid=${encodeURIComponent(uid)}`, { method:'POST' });
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+        statusEl.textContent = text;
+        await loadUid();
+      } catch (err) {
+        statusEl.textContent = `顯示失敗：${err.message}`;
+      }
+    }
+
+    async function saveNote(uid, note) {
+      if (localPreview) {
+        statusEl.textContent = `本機預覽不會真的儲存 ${uid} 的註解。`;
+        return;
+      }
+      try {
+        const body = new URLSearchParams();
+        body.set('note', note);
+        const res = await fetch(`/note?uid=${encodeURIComponent(uid)}`, {
+          method:'POST',
+          headers:{ 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+          body
+        });
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+        statusEl.textContent = text;
+        await loadBindings();
+      } catch (err) {
+        statusEl.textContent = `儲存註解失敗：${err.message}`;
+      }
+    }
+
+    async function deleteBinding(uid) {
+      if (localPreview) {
+        statusEl.textContent = `本機預覽不會真的刪除 ${uid}。`;
+        return;
+      }
+      if (!confirm(`確定刪除 UID ${uid} 的綁定圖片？`)) return;
+      try {
+        const res = await fetch(`/bind?uid=${encodeURIComponent(uid)}`, { method:'DELETE' });
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+        statusEl.textContent = text;
+        await Promise.all([loadBindings(), loadUid()]);
+      } catch (err) {
+        statusEl.textContent = `刪除失敗：${err.message}`;
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', () => {
+      loadBindings();
+      loadUid();
+    });
+
+    loadBindings();
+    loadUid();
+    setInterval(loadUid, 1500);
+  </script>
+</body>
+</html>

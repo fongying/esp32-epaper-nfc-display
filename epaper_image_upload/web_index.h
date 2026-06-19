@@ -1,0 +1,1163 @@
+// 本檔由 tools/export_web_header.ps1 產生，請不要手動修改。
+// 修改網頁請編輯 web\index.html，再執行該工具同步到 Arduino 韌體。
+#pragma once
+#include <Arduino.h>
+
+const char INDEX_HTML[] PROGMEM = R"HTML(
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>電子紙公告設計器</title>
+  <style>
+    :root {
+      --bg:#fbf8f2;
+      --panel:#ffffff;
+      --panel-2:#fff7e8;
+      --ink:#18181b;
+      --muted:#5f6673;
+      --line:#e7dfd2;
+      --accent:#ec4899;
+      --accent-2:#0ea5a3;
+      --red:#d10f1f;
+      --cream:#fffdf7;
+      --focus:#2563eb;
+    }
+    * { box-sizing:border-box; }
+    [hidden] { display:none !important; }
+    html { color-scheme:light; }
+    body {
+      margin:0;
+      min-height:100vh;
+      background:
+        linear-gradient(90deg, rgba(24,24,27,.035) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(24,24,27,.035) 1px, transparent 1px),
+        var(--bg);
+      background-size:24px 24px;
+      color:var(--ink);
+      font-family:"Microsoft JhengHei","Noto Sans TC",Arial,sans-serif;
+      letter-spacing:0;
+    }
+    button, input, select { font:inherit; }
+    button {
+      border:1px solid var(--ink);
+      border-radius:8px;
+      min-height:40px;
+      padding:9px 12px;
+      background:var(--panel);
+      color:var(--ink);
+      cursor:pointer;
+      transition:background-color .18s ease, color .18s ease, border-color .18s ease;
+    }
+    button:hover { background:var(--panel-2); }
+    button:focus-visible, input:focus-visible, select:focus-visible, canvas:focus-visible {
+      outline:3px solid rgba(37,99,235,.32);
+      outline-offset:2px;
+    }
+    button.primary { background:var(--ink); color:#fff; }
+    button.primary:hover { background:#3f3f46; }
+    button.warn { border-color:var(--red); color:var(--red); }
+    button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+    input[type=file], input[type=text], select, input[type=range] {
+      width:100%;
+      min-height:40px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      padding:9px 10px;
+      background:#fff;
+      color:var(--ink);
+    }
+    input[type=range] { padding:0; accent-color:var(--accent); }
+    label { display:grid; gap:7px; color:var(--muted); font-size:13px; }
+    .app {
+      width:min(1480px, calc(100vw - 32px));
+      min-height:100dvh;
+      margin:0 auto;
+      padding:16px 0;
+      display:grid;
+      grid-template-rows:auto minmax(0, 1fr);
+      gap:16px;
+    }
+    .topbar {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:rgba(255,255,255,.92);
+      padding:14px 16px;
+    }
+    .workspace {
+      display:grid;
+      grid-template-columns:minmax(280px, 1fr) minmax(520px, 1.88fr) minmax(280px, .9fr);
+      grid-template-areas:"tools canvas side";
+      gap:16px;
+      align-items:stretch;
+      min-height:calc(100dvh - 122px);
+    }
+    .brand h1 { margin:0; font-size:24px; line-height:1.2; }
+    .brand p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .mode {
+      display:flex;
+      gap:6px;
+      padding:4px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--cream);
+    }
+    .top-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    .nav-link {
+      min-height:42px;
+      padding:9px 12px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--cream);
+      color:var(--ink);
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .mode button { min-height:34px; border:0; padding:7px 10px; }
+    .panel {
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:rgba(255,255,255,.94);
+      padding:14px;
+      min-width:0;
+    }
+    .panel h2 {
+      margin:0 0 12px;
+      font-size:15px;
+      letter-spacing:0;
+    }
+    .stack { display:grid; gap:12px; }
+    .tools-panel { grid-area:tools; align-content:start; }
+    .side-stack {
+      grid-area:side;
+      display:grid;
+      grid-template-rows:minmax(206px, auto) 1fr;
+      gap:16px;
+      min-width:0;
+    }
+    .tools { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .wide { grid-column:1 / -1; }
+    .settings-card {
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:var(--cream);
+      padding:12px;
+      display:grid;
+      gap:10px;
+    }
+    .settings-card h3 {
+      margin:0;
+      font-size:14px;
+    }
+    .settings-grid {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+    .settings-grid label { grid-column:1 / -1; }
+    .settings-meta {
+      color:var(--muted);
+      font-size:12px;
+      line-height:1.5;
+      min-height:18px;
+    }
+    .network-list {
+      display:grid;
+      gap:6px;
+      max-height:180px;
+      overflow:auto;
+      padding:2px;
+      grid-column:1 / -1;
+    }
+    .network-item {
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      width:100%;
+      min-height:36px;
+      border-color:var(--line);
+      text-align:left;
+    }
+    .network-item small {
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .canvas-panel {
+      grid-area:canvas;
+      display:grid;
+      grid-template-rows:1fr auto auto;
+      gap:12px;
+      justify-items:center;
+      align-items:center;
+      padding:16px 20px;
+    }
+    .canvas-shell {
+      width:min(100%, 550px);
+      border:1px solid var(--ink);
+      border-radius:8px;
+      background:#fff;
+      padding:18px;
+    }
+    .canvas-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+      color:var(--muted);
+      font-size:13px;
+    }
+    canvas {
+      display:block;
+      width:400px;
+      height:300px;
+      max-width:100%;
+      border:1px solid #cfd5dd;
+      background:#fff;
+      touch-action:none;
+    }
+    .canvas-panel .primary { min-width:132px; }
+    .hint { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+    .status {
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:8px;
+      background:var(--cream);
+      padding:10px 12px;
+      color:var(--ink);
+      font-size:13px;
+      line-height:1.45;
+    }
+    .update-tip {
+      width:100%;
+      border-left:4px solid var(--accent-2);
+      border-radius:8px;
+      background:#f1fffa;
+      padding:10px 12px;
+      color:var(--ink);
+      font-size:13px;
+      line-height:1.45;
+    }
+    .nfc-panel {
+      background:linear-gradient(180deg, #fff 0%, #f7fffb 100%);
+      border-color:#b9eadb;
+    }
+    .nfc-readout {
+      display:grid;
+      gap:8px;
+      border:1px solid #cbeee4;
+      border-radius:8px;
+      background:#f1fffa;
+      padding:12px;
+    }
+    .uid-value {
+      min-height:34px;
+      display:flex;
+      align-items:center;
+      overflow-wrap:anywhere;
+      font-family:"Consolas","Courier New",monospace;
+      font-size:20px;
+      font-weight:800;
+      letter-spacing:1px;
+      color:#075e54;
+    }
+    .nfc-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .nfc-note { margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+    .swatches { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .swatches.three { grid-template-columns:repeat(3, 1fr); }
+    .swatch { display:flex; align-items:center; justify-content:center; gap:8px; }
+    .dot { width:14px; height:14px; border-radius:50%; border:1px solid var(--ink); background:#000; }
+    .dot.red { background:var(--red); }
+    .dot.white { background:#fff; }
+    .prop-empty {
+      display:grid;
+      place-items:center;
+      min-height:132px;
+      border:1px dashed var(--line);
+      border-radius:8px;
+      color:var(--muted);
+      text-align:center;
+      padding:14px;
+      font-size:13px;
+      line-height:1.5;
+    }
+    .prop-form { display:grid; gap:12px; }
+    .meta {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      color:var(--muted);
+      font-size:12px;
+      border-top:1px solid var(--line);
+      padding-top:10px;
+    }
+    @media (max-width: 1040px) {
+      .app { width:min(100vw - 24px, 900px); }
+      .workspace {
+        grid-template-columns:minmax(0, 1fr) minmax(280px, .78fr);
+        grid-template-areas:
+          "canvas canvas"
+          "tools side";
+        min-height:auto;
+      }
+      .side-stack { grid-template-rows:auto auto; }
+    }
+    @media (max-width: 720px) {
+      .app { width:min(100vw - 16px, 520px); padding:8px 0 18px; gap:10px; }
+      .workspace {
+        grid-template-columns:1fr;
+        grid-template-areas:
+          "canvas"
+          "tools"
+          "side";
+        gap:10px;
+      }
+      .topbar { align-items:stretch; flex-direction:column; }
+      .top-actions { display:grid; grid-template-columns:1fr; }
+      .mode { width:100%; }
+      .mode button { flex:1; }
+      .panel { padding:12px; }
+      .canvas-panel { padding:12px; grid-template-rows:auto auto auto; }
+      .canvas-shell { padding:10px; width:100%; }
+      canvas { width:100%; height:auto; aspect-ratio:4 / 3; }
+      .tools { grid-template-columns:1fr 1fr; }
+      .wide { grid-column:auto; }
+      .nfc-actions { grid-template-columns:1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition:none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <h1>電子紙公告設計器</h1>
+        <p>固定 400 x 300 畫布，完成後直接送到 http://epaper.local</p>
+      </div>
+      <div class="top-actions">
+        <a class="nav-link" href="/nfc">NFC 管理</a>
+        <a class="nav-link" href="/config">設定</a>
+        <div class="mode" aria-label="顯示模式">
+          <button id="modeBw" type="button" class="active">黑白</button>
+          <button id="modeBwr" type="button">黑白紅</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 工作區是主要版面容器：桌面三欄底部齊平，手機版會改成單欄排序。 -->
+    <div class="workspace">
+      <section class="panel stack tools-panel">
+        <h2>素材與工具</h2>
+        <label>
+          背景圖片
+          <input id="file" type="file" accept="image/*">
+        </label>
+        <label>
+          畫布底色
+          <div class="swatches three">
+            <button id="bgWhite" type="button" class="swatch active">
+              <span class="dot white"></span>白色
+            </button>
+            <button id="bgBlack" type="button" class="swatch">
+              <span class="dot"></span>黑色
+            </button>
+            <button id="bgRed" type="button" class="swatch">
+              <span class="dot red"></span>紅色
+            </button>
+          </div>
+        </label>
+        <div class="tools">
+          <button id="addText" type="button">新增文字</button>
+          <button id="addRect" type="button">矩形</button>
+          <button id="addCircle" type="button">圓形</button>
+          <button id="addLine" type="button">直線</button>
+          <button id="clearBg" type="button">移除背景</button>
+          <button id="clear" type="button" class="warn">清空畫布</button>
+        </div>
+        <p class="hint">畫布會顯示接近電子紙輸出的白/黑/紅結果。點選物件後可拖曳，右側會顯示可調整的屬性。</p>
+      </section>
+
+      <section class="panel canvas-panel">
+        <div class="canvas-shell">
+          <div class="canvas-head">
+            <span>預覽畫布</span>
+            <strong>400 x 300</strong>
+          </div>
+          <canvas id="preview" width="400" height="300" tabindex="0" aria-label="公告設計預覽畫布"></canvas>
+        </div>
+      <div class="status" id="status">就緒。請新增文字、圖形或背景圖片。</div>
+      <div class="update-tip" id="updateTip" hidden></div>
+      <button id="upload" type="button" class="primary">送到電子紙</button>
+    </section>
+
+      <aside class="side-stack">
+        <!-- 右側欄位：上方是物件屬性，下方是 NFC 綁定狀態，避免 NFC 區塊掉到左下角。 -->
+        <section class="panel stack inspector-panel">
+          <h2>選取物件</h2>
+          <div id="emptyProps" class="prop-empty">尚未選取物件。<br>請點選畫布上的文字或圖形。</div>
+          <div id="propForm" class="prop-form" hidden>
+            <label id="textLabel">
+              文字內容
+              <input id="textValue" type="text" maxlength="42">
+            </label>
+            <label>
+              物件顏色
+              <div class="swatches three">
+                <button id="colorWhite" type="button" class="swatch">
+                  <span class="dot white"></span>白
+                </button>
+                <button id="colorBlack" type="button" class="swatch">
+                  <span class="dot"></span>黑
+                </button>
+                <button id="colorRed" type="button" class="swatch">
+                  <span class="dot red"></span>紅
+                </button>
+              </div>
+            </label>
+            <label id="sizeLabel">
+              大小 / 粗細
+              <input id="sizeValue" type="range" min="12" max="72" value="30">
+            </label>
+            <div class="tools">
+              <button id="bringForward" type="button">上移一層</button>
+              <button id="sendBackward" type="button">下移一層</button>
+              <button id="rotateLeft" type="button">向左旋轉</button>
+              <button id="rotateRight" type="button">向右旋轉</button>
+              <button id="mirrorSelected" type="button" class="wide">水平鏡像</button>
+              <button id="deleteSelected" type="button" class="warn wide">刪除物件</button>
+            </div>
+            <div class="meta">
+              <span id="objectType">類型</span>
+              <span id="objectPos">X 0 / Y 0</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- NFC 區塊：顯示最後讀到的 UID，並把目前畫布綁定到該卡片。 -->
+        <section class="panel stack nfc-panel">
+          <h2>NFC 綁定</h2>
+          <div class="nfc-readout">
+            <span>最後讀取 UID</span>
+            <strong id="nfcUid" class="uid-value">尚未讀卡</strong>
+            <small id="nfcStatus">等待 NFC 模組。</small>
+          </div>
+          <div class="nfc-actions">
+            <button id="refreshNfc" type="button">重新讀取</button>
+            <button id="bindNfc" type="button" class="primary">綁定目前畫布</button>
+          </div>
+          <p class="nfc-note">綁定後，之後刷同一張卡會直接顯示這次畫布內容。黑白紅模式會保存黑層與紅層。</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const W = 400;
+    const H = 300;
+    const BYTES = (W / 8) * H;
+    const canvas = document.getElementById('preview');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const composeCanvas = document.createElement('canvas');
+    composeCanvas.width = W;
+    composeCanvas.height = H;
+    const composeCtx = composeCanvas.getContext('2d', { willReadFrequently: true });
+    const statusEl = document.getElementById('status');
+    const fileEl = document.getElementById('file');
+    const emptyProps = document.getElementById('emptyProps');
+    const propForm = document.getElementById('propForm');
+    const textLabel = document.getElementById('textLabel');
+    const textValueEl = document.getElementById('textValue');
+    const sizeLabel = document.getElementById('sizeLabel');
+    const sizeValueEl = document.getElementById('sizeValue');
+    const colorWhiteEl = document.getElementById('colorWhite');
+    const colorBlackEl = document.getElementById('colorBlack');
+    const colorRedEl = document.getElementById('colorRed');
+    const bgWhiteEl = document.getElementById('bgWhite');
+    const bgBlackEl = document.getElementById('bgBlack');
+    const bgRedEl = document.getElementById('bgRed');
+    const objectTypeEl = document.getElementById('objectType');
+    const objectPosEl = document.getElementById('objectPos');
+    const modeBwEl = document.getElementById('modeBw');
+    const modeBwrEl = document.getElementById('modeBwr');
+    const nfcUidEl = document.getElementById('nfcUid');
+    const nfcStatusEl = document.getElementById('nfcStatus');
+    const bindNfcEl = document.getElementById('bindNfc');
+    const refreshNfcEl = document.getElementById('refreshNfc');
+    const updateTipEl = document.getElementById('updateTip');
+    // 本機直接開啟 web/index.html 時，不會有 ESP32 的 /uid 與 /bind API；此旗標讓網頁仍可用來檢查排版。
+    const localPreview = location.protocol === 'file:';
+    const mockUpdate = localPreview || new URLSearchParams(location.search).has('mockUpdate');
+    if (localPreview) {
+      document.querySelector('.nav-link[href="/nfc"]').setAttribute('href', 'nfc.html');
+      document.querySelector('.nav-link[href="/config"]').setAttribute('href', 'config.html');
+    }
+
+    let mode = 'bw';
+    let bgImage = null;
+    let objects = [];
+    let nextId = 1;
+    let selectedId = null;
+    let dragState = null;
+    let defaultColor = 'black';
+    let canvasBg = 'white';
+
+    function setStatus(message) {
+      statusEl.textContent = message;
+    }
+
+    function compareVersions(a, b) {
+      const pa = String(a || '0').split('.').map(n => parseInt(n, 10) || 0);
+      const pb = String(b || '0').split('.').map(n => parseInt(n, 10) || 0);
+      const len = Math.max(pa.length, pb.length);
+      for (let i = 0; i < len; i++) {
+        const diff = (pa[i] || 0) - (pb[i] || 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    }
+
+    async function loadCurrentVersion() {
+      if (localPreview) {
+        return {
+          version:'1.0.0',
+          build:'local-preview',
+          device:'esp32c3-epaper-nfc-display',
+          staConnected:true,
+          manifestUrl:''
+        };
+      }
+      const res = await fetch('/version', { cache:'no-store' });
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      return res.json();
+    }
+
+    async function loadUpdateManifest(current) {
+      if (mockUpdate) {
+        return {
+          version:'1.1.0',
+          build:'test-build',
+          notes:'這是測試用的新版本提示，尚未執行 OTA。',
+          firmware_url:''
+        };
+      }
+      if (!current.staConnected || !current.manifestUrl) return null;
+      const res = await fetch(current.manifestUrl, { cache:'no-store' });
+      if (!res.ok) throw new Error(`manifest HTTP ${res.status}`);
+      return res.json();
+    }
+
+    // 開啟網頁時檢查版本；目前只測試「發現新版並詢問」流程，還不會真的寫入 OTA。
+    async function checkFirmwareUpdate() {
+      try {
+        const current = await loadCurrentVersion();
+        const manifest = await loadUpdateManifest(current);
+        if (!manifest) {
+          console.info('update check skipped: no manifest URL or Wi-Fi is not connected');
+          return;
+        }
+        if (manifest.device && manifest.device !== current.device) {
+          console.info(`update check skipped: device mismatch manifest=${manifest.device} current=${current.device}`);
+          return;
+        }
+        if (compareVersions(manifest.version, current.version) <= 0) {
+          console.info(`update check skipped: manifest version ${manifest.version} is not newer than ${current.version}`);
+          return;
+        }
+
+        updateTipEl.hidden = false;
+        updateTipEl.textContent = `發現新版本 ${manifest.version}。${manifest.notes || ''}`;
+        const updateMessage = [
+          `發現新版本 ${manifest.version}`,
+          `目前版本 ${current.version}`,
+          '',
+          manifest.notes || '',
+          '',
+          '要更新嗎？'
+        ].join('\n');
+        const ok = confirm(updateMessage);
+        if (ok) {
+          await applyFirmwareUpdate(manifest);
+        } else {
+          setStatus('已略過此次更新提示。');
+        }
+      } catch (err) {
+        console.warn('update check failed', err);
+      }
+    }
+
+    async function applyFirmwareUpdate(manifest) {
+      const firmwareUrl = manifest.firmware_url || manifest.firmwareUrl || '';
+      if (!firmwareUrl) {
+        setStatus('這個版本只有更新提示，manifest 尚未提供 firmware_url。');
+        return;
+      }
+
+      const body = new URLSearchParams();
+      body.set('url', firmwareUrl);
+      body.set('version', manifest.version || '');
+      body.set('sha256', manifest.sha256 || '');
+
+      setStatus('正在啟動 OTA 更新，請保持供電，不要關閉裝置。');
+      const res = await fetch('/update/apply', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+        body
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+      setStatus(`${text} 更新期間網頁可能會中斷，請等待裝置重啟。`);
+    }
+
+    function selectedObject() {
+      return objects.find(item => item.id === selectedId) || null;
+    }
+
+    function displayColor(color) {
+      if (color === 'white') return '#ffffff';
+      if (mode === 'bw') return '#000000';
+      return color === 'red' ? '#d10f1f' : '#000000';
+    }
+
+    function rawColor(color) {
+      if (color === 'red') return '#d10f1f';
+      if (color === 'black') return '#000000';
+      return '#ffffff';
+    }
+
+    function setMode(nextMode) {
+      mode = nextMode;
+      modeBwEl.classList.toggle('active', mode === 'bw');
+      modeBwrEl.classList.toggle('active', mode === 'bwr');
+      renderCanvas();
+      updateProps();
+      setStatus(mode === 'bwr' ? '已切換為黑白紅模式。' : '已切換為黑白模式，紅色物件會以黑色輸出。');
+    }
+
+    function fitImage(img) {
+      const scale = Math.min(W / img.width, H / img.height);
+      const dw = Math.round(img.width * scale);
+      const dh = Math.round(img.height * scale);
+      return { x: Math.round((W - dw) / 2), y: Math.round((H - dh) / 2), w: dw, h: dh };
+    }
+
+    function drawBackground(targetCtx, includeGuides) {
+      targetCtx.fillStyle = rawColor(canvasBg);
+      targetCtx.fillRect(0, 0, W, H);
+      if (includeGuides && canvasBg === 'white') {
+        targetCtx.save();
+        targetCtx.strokeStyle = '#f0e7db';
+        targetCtx.lineWidth = 1;
+        for (let x = 50; x < W; x += 50) {
+          targetCtx.beginPath();
+          targetCtx.moveTo(x, 0);
+          targetCtx.lineTo(x, H);
+          targetCtx.stroke();
+        }
+        for (let y = 50; y < H; y += 50) {
+          targetCtx.beginPath();
+          targetCtx.moveTo(0, y);
+          targetCtx.lineTo(W, y);
+          targetCtx.stroke();
+        }
+        targetCtx.restore();
+      }
+      if (bgImage) {
+        const box = fitImage(bgImage);
+        targetCtx.drawImage(bgImage, box.x, box.y, box.w, box.h);
+      }
+    }
+
+    function baseBox(obj) {
+      if (obj.type === 'text') {
+        ctx.save();
+        ctx.font = `700 ${obj.size || 30}px "Microsoft JhengHei", Arial, sans-serif`;
+        const w = Math.max(24, ctx.measureText(obj.text).width);
+        ctx.restore();
+        return { x: obj.x, y: obj.y, w, h: obj.size || 30 };
+      }
+      if (obj.type === 'rect') return { x: obj.x, y: obj.y, w: obj.w, h: obj.h };
+      if (obj.type === 'circle') return { x: obj.x - obj.r, y: obj.y - obj.r, w: obj.r * 2, h: obj.r * 2 };
+      return {
+        x: Math.min(obj.x1, obj.x2),
+        y: Math.min(obj.y1, obj.y2),
+        w: Math.max(1, Math.abs(obj.x2 - obj.x1)),
+        h: Math.max(1, Math.abs(obj.y2 - obj.y1))
+      };
+    }
+
+    function boxCenter(box) {
+      return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    }
+
+    function drawObjectOn(targetCtx, obj, useRawColor) {
+      const box = baseBox(obj);
+      const center = boxCenter(box);
+      const angle = ((obj.angle || 0) * Math.PI) / 180;
+      targetCtx.save();
+      targetCtx.translate(center.x, center.y);
+      targetCtx.rotate(angle);
+      targetCtx.scale(obj.mirrorX ? -1 : 1, 1);
+      targetCtx.fillStyle = useRawColor ? rawColor(obj.color) : displayColor(obj.color);
+      targetCtx.strokeStyle = useRawColor ? rawColor(obj.color) : displayColor(obj.color);
+      targetCtx.lineWidth = obj.stroke || 5;
+      targetCtx.lineCap = 'round';
+      targetCtx.lineJoin = 'round';
+      targetCtx.textBaseline = 'top';
+      targetCtx.font = `700 ${obj.size || 30}px "Microsoft JhengHei", Arial, sans-serif`;
+
+      if (obj.type === 'text') {
+        targetCtx.fillText(obj.text, -box.w / 2, -box.h / 2);
+      } else if (obj.type === 'rect') {
+        targetCtx.fillRect(-box.w / 2, -box.h / 2, box.w, box.h);
+      } else if (obj.type === 'circle') {
+        targetCtx.beginPath();
+        targetCtx.arc(0, 0, obj.r, 0, Math.PI * 2);
+        targetCtx.fill();
+      } else if (obj.type === 'line') {
+        const lx1 = obj.x1 - center.x;
+        const ly1 = obj.y1 - center.y;
+        const lx2 = obj.x2 - center.x;
+        const ly2 = obj.y2 - center.y;
+        targetCtx.beginPath();
+        targetCtx.moveTo(lx1, ly1);
+        targetCtx.lineTo(lx2, ly2);
+        targetCtx.stroke();
+      }
+      targetCtx.restore();
+    }
+
+    function renderComposedRaw() {
+      drawBackground(composeCtx, false);
+      objects.forEach(obj => drawObjectOn(composeCtx, obj, true));
+    }
+
+    function quantizeToDisplay(sourceCtx, targetCtx) {
+      const image = sourceCtx.getImageData(0, 0, W, H);
+      const data = image.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const gray = r * 0.299 + g * 0.587 + b * 0.114;
+        const isRed = mode === 'bwr' && r > 130 && r > g * 1.25 && r > b * 1.25;
+        const isBlack = !isRed && gray < 150;
+        if (isRed) {
+          data[i] = 209;
+          data[i + 1] = 15;
+          data[i + 2] = 31;
+        } else if (isBlack) {
+          data[i] = 0;
+          data[i + 1] = 0;
+          data[i + 2] = 0;
+        } else {
+          data[i] = 255;
+          data[i + 1] = 255;
+          data[i + 2] = 255;
+        }
+        data[i + 3] = 255;
+      }
+      targetCtx.putImageData(image, 0, 0);
+    }
+
+    function getBox(obj) {
+      const box = baseBox(obj);
+      const center = boxCenter(box);
+      const rad = ((obj.angle || 0) * Math.PI) / 180;
+      const sin = Math.abs(Math.sin(rad));
+      const cos = Math.abs(Math.cos(rad));
+      const w = box.w * cos + box.h * sin;
+      const h = box.w * sin + box.h * cos;
+      return { x: center.x - w / 2, y: center.y - h / 2, w, h };
+    }
+
+    function drawSelection(obj) {
+      if (!obj) return;
+      const box = getBox(obj);
+      ctx.save();
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(box.x - 6, box.y - 6, box.w + 12, box.h + 12);
+      ctx.restore();
+    }
+
+    function renderCanvas(showSelection = true) {
+      renderComposedRaw();
+      quantizeToDisplay(composeCtx, ctx);
+      if (showSelection) drawSelection(selectedObject());
+    }
+
+    function hitTest(x, y) {
+      for (let i = objects.length - 1; i >= 0; i--) {
+        const box = getBox(objects[i]);
+        if (x >= box.x - 10 && x <= box.x + box.w + 10 && y >= box.y - 10 && y <= box.y + box.h + 10) return objects[i];
+      }
+      return null;
+    }
+
+    function canvasPoint(ev) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: (ev.clientX - rect.left) * W / rect.width,
+        y: (ev.clientY - rect.top) * H / rect.height
+      };
+    }
+
+    function moveObject(obj, dx, dy) {
+      if (obj.type === 'line') {
+        obj.x1 += dx;
+        obj.y1 += dy;
+        obj.x2 += dx;
+        obj.y2 += dy;
+      } else {
+        obj.x += dx;
+        obj.y += dy;
+      }
+    }
+
+    function objectCenter(obj) {
+      const box = getBox(obj);
+      return { x: Math.round(box.x), y: Math.round(box.y) };
+    }
+
+    function updateProps() {
+      const obj = selectedObject();
+      emptyProps.hidden = !!obj;
+      propForm.hidden = !obj;
+      if (!obj) return;
+
+      textLabel.hidden = obj.type !== 'text';
+      if (obj.type === 'text') textValueEl.value = obj.text;
+
+      sizeLabel.hidden = false;
+      if (obj.type === 'line') {
+        sizeLabel.firstChild.textContent = '線條粗細';
+        sizeValueEl.min = 2;
+        sizeValueEl.max = 18;
+        sizeValueEl.value = obj.stroke || 5;
+      } else if (obj.type === 'text') {
+        sizeLabel.firstChild.textContent = '文字大小';
+        sizeValueEl.min = 14;
+        sizeValueEl.max = 72;
+        sizeValueEl.value = obj.size || 30;
+      } else {
+        sizeLabel.firstChild.textContent = '圖形大小';
+        sizeValueEl.min = 24;
+        sizeValueEl.max = 160;
+        sizeValueEl.value = obj.type === 'circle' ? obj.r * 2 : Math.max(obj.w, obj.h);
+      }
+
+      colorWhiteEl.classList.toggle('active', obj.color === 'white');
+      colorBlackEl.classList.toggle('active', obj.color === 'black');
+      colorRedEl.classList.toggle('active', obj.color === 'red');
+      bgWhiteEl.classList.toggle('active', canvasBg === 'white');
+      bgBlackEl.classList.toggle('active', canvasBg === 'black');
+      bgRedEl.classList.toggle('active', canvasBg === 'red');
+      objectTypeEl.textContent = obj.type === 'text' ? '文字' : obj.type === 'rect' ? '矩形' : obj.type === 'circle' ? '圓形' : '直線';
+      const pos = objectCenter(obj);
+      objectPosEl.textContent = `X ${pos.x} / Y ${pos.y} / ${obj.angle || 0}°${obj.mirrorX ? ' / 鏡像' : ''}`;
+    }
+
+    function selectObject(id) {
+      selectedId = id;
+      renderCanvas();
+      updateProps();
+    }
+
+    function addObject(obj) {
+      objects.push({ id: nextId++, color: defaultColor, angle:0, mirrorX:false, ...obj });
+      selectObject(objects[objects.length - 1].id);
+    }
+
+    document.getElementById('addText').addEventListener('click', () => {
+      addObject({ type:'text', text:'公告文字', x:42, y:38, size:34 });
+    });
+    document.getElementById('addRect').addEventListener('click', () => {
+      addObject({ type:'rect', x:52, y:92, w:138, h:72 });
+    });
+    document.getElementById('addCircle').addEventListener('click', () => {
+      addObject({ type:'circle', x:142, y:132, r:42 });
+    });
+    document.getElementById('addLine').addEventListener('click', () => {
+      addObject({ type:'line', x1:54, y1:218, x2:290, y2:218, stroke:5 });
+    });
+
+    fileEl.addEventListener('change', () => {
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          bgImage = img;
+          renderCanvas();
+          setStatus('背景圖片已載入，會等比例縮放置中。');
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById('clearBg').addEventListener('click', () => {
+      bgImage = null;
+      fileEl.value = '';
+      renderCanvas();
+      setStatus('已移除背景圖片。');
+    });
+
+    document.getElementById('clear').addEventListener('click', () => {
+      bgImage = null;
+      fileEl.value = '';
+      objects = [];
+      canvasBg = 'white';
+      selectedId = null;
+      renderCanvas();
+      updateProps();
+      setStatus('畫布已清空。');
+    });
+
+    document.getElementById('deleteSelected').addEventListener('click', () => {
+      objects = objects.filter(item => item.id !== selectedId);
+      selectedId = null;
+      renderCanvas();
+      updateProps();
+    });
+
+    document.getElementById('bringForward').addEventListener('click', () => {
+      const i = objects.findIndex(item => item.id === selectedId);
+      if (i >= 0 && i < objects.length - 1) {
+        [objects[i], objects[i + 1]] = [objects[i + 1], objects[i]];
+        renderCanvas();
+      }
+    });
+
+    document.getElementById('sendBackward').addEventListener('click', () => {
+      const i = objects.findIndex(item => item.id === selectedId);
+      if (i > 0) {
+        [objects[i], objects[i - 1]] = [objects[i - 1], objects[i]];
+        renderCanvas();
+      }
+    });
+
+    textValueEl.addEventListener('input', () => {
+      const obj = selectedObject();
+      if (obj && obj.type === 'text') {
+        obj.text = textValueEl.value || '公告文字';
+        renderCanvas();
+        updateProps();
+      }
+    });
+
+    sizeValueEl.addEventListener('input', () => {
+      const obj = selectedObject();
+      if (!obj) return;
+      const value = Number(sizeValueEl.value);
+      if (obj.type === 'text') obj.size = value;
+      if (obj.type === 'line') obj.stroke = value;
+      if (obj.type === 'circle') obj.r = Math.round(value / 2);
+      if (obj.type === 'rect') {
+        const ratio = obj.h / obj.w;
+        obj.w = value;
+        obj.h = Math.round(value * ratio);
+      }
+      renderCanvas();
+      updateProps();
+    });
+
+    function applyColor(color) {
+      defaultColor = color;
+      const obj = selectedObject();
+      if (obj) {
+        obj.color = color;
+        renderCanvas();
+        updateProps();
+        setStatus(color === 'red' && mode === 'bw' ? '已設為紅色；目前黑白模式會輸出為黑色。' : '物件顏色已更新。');
+      }
+    }
+
+    colorWhiteEl.addEventListener('click', () => applyColor('white'));
+    colorBlackEl.addEventListener('click', () => applyColor('black'));
+    colorRedEl.addEventListener('click', () => applyColor('red'));
+
+    function rotateSelected(delta) {
+      const obj = selectedObject();
+      if (!obj) return;
+      obj.angle = (((obj.angle || 0) + delta) % 360 + 360) % 360;
+      renderCanvas();
+      updateProps();
+      setStatus(delta < 0 ? '物件已向左旋轉。' : '物件已向右旋轉。');
+    }
+
+    function mirrorSelected() {
+      const obj = selectedObject();
+      if (!obj) return;
+      obj.mirrorX = !obj.mirrorX;
+      renderCanvas();
+      updateProps();
+      setStatus(obj.mirrorX ? '物件已水平鏡像。' : '已取消水平鏡像。');
+    }
+
+    document.getElementById('rotateLeft').addEventListener('click', () => rotateSelected(-15));
+    document.getElementById('rotateRight').addEventListener('click', () => rotateSelected(15));
+    document.getElementById('mirrorSelected').addEventListener('click', mirrorSelected);
+
+    function applyBackground(color) {
+      canvasBg = color;
+      bgWhiteEl.classList.toggle('active', canvasBg === 'white');
+      bgBlackEl.classList.toggle('active', canvasBg === 'black');
+      bgRedEl.classList.toggle('active', canvasBg === 'red');
+      renderCanvas();
+      setStatus(color === 'red' && mode === 'bw' ? '底色已設為紅色；目前黑白模式會輸出為黑色。' : '畫布底色已更新。');
+    }
+    bgWhiteEl.addEventListener('click', () => applyBackground('white'));
+    bgBlackEl.addEventListener('click', () => applyBackground('black'));
+    bgRedEl.addEventListener('click', () => applyBackground('red'));
+    modeBwEl.addEventListener('click', () => setMode('bw'));
+    modeBwrEl.addEventListener('click', () => setMode('bwr'));
+
+    canvas.addEventListener('pointerdown', ev => {
+      const p = canvasPoint(ev);
+      const obj = hitTest(p.x, p.y);
+      selectedId = obj ? obj.id : null;
+      dragState = obj ? { id: obj.id, x: p.x, y: p.y } : null;
+      canvas.setPointerCapture(ev.pointerId);
+      renderCanvas();
+      updateProps();
+    });
+
+    canvas.addEventListener('pointermove', ev => {
+      if (!dragState) return;
+      const p = canvasPoint(ev);
+      const obj = objects.find(item => item.id === dragState.id);
+      if (!obj) return;
+      moveObject(obj, p.x - dragState.x, p.y - dragState.y);
+      dragState.x = p.x;
+      dragState.y = p.y;
+      renderCanvas();
+      updateProps();
+    });
+
+    canvas.addEventListener('pointerup', ev => {
+      dragState = null;
+      canvas.releasePointerCapture(ev.pointerId);
+    });
+
+    function buildBuffers() {
+      renderComposedRaw();
+      const data = composeCtx.getImageData(0, 0, W, H).data;
+      const black = new Uint8Array(BYTES);
+      const red = new Uint8Array(BYTES);
+      const threeColor = mode === 'bwr';
+
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const idx = (y * W + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const gray = r * 0.299 + g * 0.587 + b * 0.114;
+          const isRed = threeColor && r > 130 && r > g * 1.25 && r > b * 1.25;
+          const isBlack = !isRed && gray < 150;
+          if (isRed || isBlack) {
+            const byteIndex = y * (W / 8) + (x >> 3);
+            const mask = 0x80 >> (x & 7);
+            if (isRed) red[byteIndex] |= mask;
+            if (isBlack) black[byteIndex] |= mask;
+          }
+        }
+      }
+
+      renderCanvas(true);
+      if (!threeColor) return black;
+      const payload = new Uint8Array(BYTES * 2);
+      payload.set(black, 0);
+      payload.set(red, BYTES);
+      return payload;
+    }
+
+    function normalizeUid(uid) {
+      return (uid || '').replace(/[^0-9A-Fa-f]/g, '').toUpperCase();
+    }
+
+    // 從 ESP32 讀取最後一次 NFC UID；本機預覽時只顯示提示，不呼叫 API。
+    async function refreshNfcStatus() {
+      if (localPreview) {
+        nfcUidEl.textContent = '本機預覽';
+        nfcStatusEl.textContent = '燒入 ESP32 後會在這裡顯示 NFC UID。';
+        bindNfcEl.disabled = true;
+        return;
+      }
+      try {
+        const res = await fetch('/uid', { cache:'no-store' });
+        const data = await res.json();
+        nfcUidEl.textContent = data.uid || '尚未讀卡';
+        nfcStatusEl.textContent = data.status || (data.ready ? 'NFC 已就緒' : 'NFC 未就緒');
+        bindNfcEl.disabled = !data.uid;
+      } catch (err) {
+        nfcStatusEl.textContent = `無法讀取 NFC 狀態：${err.message}`;
+        bindNfcEl.disabled = true;
+      }
+    }
+
+    // 將目前 400x300 畫布打包後送到 ESP32，儲存成該 UID 的 LittleFS 綁定檔。
+    async function bindCurrentDesignToUid() {
+      if (localPreview) {
+        setStatus('目前是本機預覽模式，請燒入 ESP32 後再綁定 NFC。');
+        return;
+      }
+      const uid = normalizeUid(nfcUidEl.textContent);
+      if (!uid) {
+        setStatus('請先刷卡，再綁定目前畫布。');
+        return;
+      }
+      try {
+        const payload = buildBuffers();
+        const form = new FormData();
+        form.append('image', new Blob([payload], { type:'application/octet-stream' }), `${uid}.bin`);
+        setStatus(`正在綁定 UID ${uid}。`);
+        const res = await fetch(`/bind?uid=${encodeURIComponent(uid)}`, { method:'POST', body:form });
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+        setStatus(text);
+        await refreshNfcStatus();
+      } catch (err) {
+        setStatus(`綁定失敗：${err.message}`);
+      }
+    }
+
+    refreshNfcEl.addEventListener('click', refreshNfcStatus);
+    bindNfcEl.addEventListener('click', bindCurrentDesignToUid);
+    setInterval(refreshNfcStatus, 1500);
+    document.getElementById('upload').addEventListener('click', async () => {
+      try {
+        const payload = buildBuffers();
+        const form = new FormData();
+        form.append('image', new Blob([payload], { type:'application/octet-stream' }), 'epaper.bin');
+        setStatus('上傳中，電子紙更新需要一點時間。');
+        const res = await fetch('/upload', { method:'POST', body:form });
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || `HTTP ${res.status}`);
+        setStatus(text);
+      } catch (err) {
+        setStatus(`上傳失敗：${err.message}`);
+      }
+    });
+
+    renderCanvas();
+    updateProps();
+    refreshNfcStatus();
+    checkFirmwareUpdate();
+  </script>
+</body>
+</html>
+
+)HTML";
