@@ -23,6 +23,14 @@ I2C NFC GND  -> GND
 I2C NFC SDA  -> GPIO8
 I2C NFC SCL  -> GPIO9
 
+SPI RFID VCC -> 3V3
+SPI RFID GND -> GND
+SPI RFID SCK -> GPIO4
+SPI RFID MOSI/SDA/DIN -> GPIO6
+SPI RFID MISO -> GPIO20
+SPI RFID NSS/SS/SDA -> GPIO10
+SPI RFID RST -> GPIO21
+
 WiFi-off button -> GPIO5 and GND
 ```
 
@@ -32,7 +40,7 @@ Network behavior:
 - If STA does not connect within 30 seconds, starts a configuration AP
 - Configuration AP SSID is `ESP32_e-paper_4.2V2_<random>` and IP is `192.168.0.1`
 - The AP runs a DNS captive portal so phones should open the web page automatically
-- First boot defaults to `ICSLab` / `CSIEB323`
+- First boot has no built-in SSID/password and starts the configuration AP until Wi-Fi settings are saved
 - The `/config` page provides Wi-Fi scanning and settings; saving a new SSID/password restarts the ESP32
 - Wi-Fi settings survive normal firmware updates and OTA because they are stored in NVS
 - Wi-Fi settings are erased only when the full flash/NVS partition is erased
@@ -69,7 +77,8 @@ Behavior:
 - Browser renders the final 400x300 design and sends 1-bit bitmap data to the ESP32
 - Black/white mode uploads 15000 bytes
 - Black/white/red mode uploads 30000 bytes: black layer first, red layer second
-- Reads NFC UID through I2C using `Arduino_MFRC522v2`
+- Reads NFC UID through `Arduino_MFRC522v2`
+- Auto-detects an I2C reader first, then falls back to SPI if I2C is not found
 - Shows the latest NFC UID on the web page
 - Lets the current 400x300 canvas bind to the latest UID
 - Saves UID bindings in LittleFS as `/<UID>.bin`
@@ -83,8 +92,8 @@ Behavior:
 
 NFC binding flow:
 
-1. Connect your phone or computer to the same `ICSLab` network.
-2. Open `http://epaper.local` or the STA IP shown in the serial monitor.
+1. Connect your phone or computer to the ESP32 configuration AP, or to the same Wi-Fi saved in `/config`.
+2. Open `http://epaper.local`, `http://192.168.0.1` in AP mode, or the STA IP shown in the serial monitor.
 3. Tap an IC card on the NFC reader and wait for the UID to appear in the NFC section.
 4. Design the canvas normally.
 5. Click `綁定目前畫布`.
@@ -94,28 +103,39 @@ Notes:
 
 - The I2C NFC address is set to `0x28`.
 - GPIO8/GPIO9 are used only for NFC I2C in this sketch.
+- SPI RFID shares `SCK=GPIO4` and `MOSI=GPIO6` with the e-paper, but uses its own `SS=GPIO10`, `MISO=GPIO20`, and `RST=GPIO21`.
+- Do not wire SPI RFID MISO to GPIO5 in this build; GPIO5 is reserved for the Wi-Fi button.
+- SPI RC522 line diagnostics are disabled by default. Set `RFID_DEBUG` to `1` in `epaper_image_upload.ino` to print `VersionReg`, MISO idle state, and SPI pin diagnostics.
 - GPIO5 uses the ESP32 internal pull-up, so the button should be normally open and short GPIO5 to GND when pressed.
 - After Wi-Fi is turned off, short-press GPIO5 to reconnect Wi-Fi. NFC card scanning remains active.
+
+Build notes:
+
+- `epaper_image_upload.ino` includes the local `GxEPD2_3C_min.h` header instead of the full library `GxEPD2_3C.h`.
+- `GxEPD2_3C_min.h` keeps the upstream `GxEPD2_3C` wrapper class but only includes `gdey3c/GxEPD2_420c_GDEY042Z98.h`, which is the driver used by the HINK-E042A13 / GDEY042Z98 4.2 inch 400x300 three-color panel.
+- If you change to a different e-paper panel, update `GxEPD2_3C_min.h` and the display type in `epaper_image_upload.ino` together.
 
 Open `epaper_image_upload.ino` in Arduino IDE and upload to the ESP32-C3.
 
 Web UI editing:
 
 ```text
-web/index.html      -> 可直接用瀏覽器開啟檢查排版
-web/nfc.html        -> NFC 綁定管理頁，可直接用瀏覽器開啟檢查排版
-web_index.h         -> Arduino 實際燒入用的 HTML header
-nfc_index.h         -> Arduino 實際燒入用的 NFC 管理頁 header
-tools/export_web_header.ps1 -> 將 web/index.html 與 web/nfc.html 同步成 Arduino header
+web/index.html       -> 設計器頁面，可直接用瀏覽器開啟檢查排版
+web/nfc.html         -> NFC 綁定管理頁，可直接用瀏覽器開啟檢查排版
+web/config.html      -> Wi-Fi 設定頁，可直接用瀏覽器開啟檢查排版
+web_index.h          -> Arduino 實際燒入用的設計器 HTML header
+nfc_index.h          -> Arduino 實際燒入用的 NFC 管理頁 header
+config_index.h       -> Arduino 實際燒入用的 Wi-Fi 設定頁 header
+tools/export_web_header.ps1 -> 將 web/*.html 同步成 Arduino header
 ```
 
-修改網頁時先編輯 `web/index.html`。版面確認完成後，在專案根目錄執行：
+修改網頁時先編輯 `web/*.html`，確認排版後再執行同步腳本：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\export_web_header.ps1
 ```
 
-再回到 Arduino IDE 燒入。`epaper_image_upload.ino` 會透過 `#include "web_index.h"` 與 `#include "nfc_index.h"` 使用同步後的網頁內容。
+再回到 Arduino IDE 燒入。`epaper_image_upload.ino` 會透過 `#include "web_index.h"`、`#include "nfc_index.h"` 與 `#include "config_index.h"` 使用同步後的網頁內容。
 
 NFC management page:
 

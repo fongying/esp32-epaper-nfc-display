@@ -2,7 +2,7 @@
   "device": "esp32c3-epaper-nfc-display",
   "version": "1.0.0",
   "build": "2026-06-19",
-  "notes": "V1.0 初始發布版本；有更新檔時再提高 version 並填入 firmware_url。",
-  "firmware_url": "",
-  "sha256": ""
+  "notes": "V1.0.0 首次正式發布：支援三色電子紙設計器、NFC I2C/SPI 自動偵測、Wi-Fi 設定與 OTA 更新。",
+  "firmware_url": "https://github.com/fongying/esp32-epaper-nfc-display/releases/download/v1.0.0/epaper_image_upload-v1.0.0.bin",
+  "sha256": "67b666863d426aa49241ce9e2b450d649b1d36ada1a9559400c8d799584d5df7"
 }

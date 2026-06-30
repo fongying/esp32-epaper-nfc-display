@@ -12,11 +12,17 @@
 #include <esp_sleep.h>
 #include <MFRC522v2.h>
 #include <MFRC522DriverI2C.h>
-#include <GxEPD2_3C.h>
+#include <MFRC522DriverSPI.h>
+#include <MFRC522DriverPinSimple.h>
+#include "GxEPD2_3C_min.h"
 #include <Fonts/FreeMonoBold9pt7b.h>
 
-static const char* DEFAULT_WIFI_SSID = "ICSLab";
-static const char* DEFAULT_WIFI_PASSWORD = "CSIEB323";
+#ifndef RFID_DEBUG
+#define RFID_DEBUG 0
+#endif
+
+static const char* DEFAULT_WIFI_SSID = "";
+static const char* DEFAULT_WIFI_PASSWORD = "";
 static const char* MDNS_NAME = "epaper";
 static const char* AP_SSID_PREFIX = "ESP32_e-paper_4.2V2_";
 static const char* FIRMWARE_DEVICE = "esp32c3-epaper-nfc-display";
@@ -46,11 +52,50 @@ static constexpr uint8_t EPD_MOSI = 6;
 static constexpr uint8_t NFC_SDA = 8;
 static constexpr uint8_t NFC_SCL = 9;
 static constexpr uint8_t NFC_I2C_ADDRESS = 0x28;
+static constexpr uint8_t NFC_SPI_MISO = 20;
+static constexpr uint8_t NFC_SPI_CS = 10;
+static constexpr uint8_t NFC_SPI_RST = 21;
 
 static constexpr uint8_t WAKE_BUTTON = 5;
 static constexpr uint32_t SLEEP_TIMEOUT_MS = 5UL * 60UL * 1000UL;
 static constexpr uint32_t NFC_POLL_MS = 250;
 static constexpr uint32_t SAME_UID_REFRESH_GUARD_MS = 8000;
+
+class MFRC522DriverSPIPinned : public MFRC522DriverSPI
+{
+public:
+  MFRC522DriverSPIPinned(
+    MFRC522DriverPin& chipSelectPin,
+    SPIClass& spiClass,
+    int8_t sck,
+    int8_t miso,
+    int8_t mosi,
+    int8_t ss,
+    const SPISettings spiSettings = SPISettings(1000000u, MSBFIRST, SPI_MODE0)
+  ) : MFRC522DriverSPI(chipSelectPin, spiClass, spiSettings),
+      _sck(sck),
+      _miso(miso),
+      _mosi(mosi),
+      _ss(ss)
+  {
+  }
+
+  bool init() override
+  {
+    // MFRC522DriverSPI::init() calls SPI.begin() without pins. On ESP32-C3 that
+    // can silently switch back to default SPI pins, so keep the PCB pin mapping here.
+    _spiClass.begin(_sck, _miso, _mosi, _ss);
+    if (_chipSelectPin.init() == false) return false;
+    _chipSelectPin.high();
+    return true;
+  }
+
+private:
+  int8_t _sck;
+  int8_t _miso;
+  int8_t _mosi;
+  int8_t _ss;
+};
 
 GxEPD2_3C<GxEPD2_420c_GDEY042Z98, GxEPD2_420c_GDEY042Z98::HEIGHT> display(
   GxEPD2_420c_GDEY042Z98(/*CS=*/ EPD_CS, /*DC=*/ EPD_DC, /*RST=*/ EPD_RST, /*BUSY=*/ EPD_BUSY)
@@ -59,8 +104,21 @@ GxEPD2_3C<GxEPD2_420c_GDEY042Z98, GxEPD2_420c_GDEY042Z98::HEIGHT> display(
 WebServer server(80);
 DNSServer dnsServer;
 Preferences preferences;
-MFRC522DriverI2C nfcDriver{NFC_I2C_ADDRESS, Wire};
-MFRC522 nfcReader{nfcDriver};
+MFRC522DriverI2C nfcI2cDriver{NFC_I2C_ADDRESS, Wire};
+MFRC522 nfcI2cReader{nfcI2cDriver};
+MFRC522DriverPinSimple nfcSpiCsPin{NFC_SPI_CS};
+MFRC522DriverSPIPinned nfcSpiDriver{nfcSpiCsPin, SPI, EPD_SCK, NFC_SPI_MISO, EPD_MOSI, NFC_SPI_CS};
+MFRC522 nfcSpiReader{nfcSpiDriver};
+MFRC522* activeNfcReader = nullptr;
+
+enum class NfcBus : uint8_t
+{
+  None,
+  I2C,
+  SPI
+};
+
+NfcBus activeNfcBus = NfcBus::None;
 
 uint8_t blackBuffer[IMAGE_BYTES];
 uint8_t redBuffer[IMAGE_BYTES];
@@ -277,6 +335,48 @@ String uidToString(const MFRC522::Uid& uid)
   return out;
 }
 
+#if RFID_DEBUG
+byte readRc522SpiVersionRaw()
+{
+  digitalWrite(EPD_CS, HIGH);
+  digitalWrite(NFC_SPI_CS, HIGH);
+  delayMicroseconds(5);
+
+  SPI.beginTransaction(SPISettings(1000000u, MSBFIRST, SPI_MODE0));
+  digitalWrite(NFC_SPI_CS, LOW);
+  delayMicroseconds(5);
+  SPI.transfer(0x80 | (0x37 << 1)); // VersionReg, read command.
+  byte version = SPI.transfer(0x00);
+  digitalWrite(NFC_SPI_CS, HIGH);
+  SPI.endTransaction();
+  return version;
+}
+
+void printNfcSpiLineDiagnostics()
+{
+  pinMode(NFC_SPI_MISO, INPUT);
+  delay(2);
+  int misoInput = digitalRead(NFC_SPI_MISO);
+
+  pinMode(NFC_SPI_MISO, INPUT_PULLUP);
+  delay(2);
+  int misoPullup = digitalRead(NFC_SPI_MISO);
+
+  pinMode(NFC_SPI_MISO, INPUT_PULLDOWN);
+  delay(2);
+  int misoPulldown = digitalRead(NFC_SPI_MISO);
+
+  pinMode(NFC_SPI_MISO, INPUT);
+
+  Serial.print("NFC SPI MISO diag: input=");
+  Serial.print(misoInput);
+  Serial.print(" pullup=");
+  Serial.print(misoPullup);
+  Serial.print(" pulldown=");
+  Serial.println(misoPulldown);
+}
+#endif
+
 bool saveBindingImage(const String& uid)
 {
   if (!fsReady) return false;
@@ -335,18 +435,91 @@ void setupFileSystem()
 
 void setupNfc()
 {
+  activeNfcReader = nullptr;
+  activeNfcBus = NfcBus::None;
+  nfcReady = false;
+
+  pinMode(NFC_SPI_RST, OUTPUT);
+  digitalWrite(NFC_SPI_RST, HIGH);
+  pinMode(NFC_SPI_CS, OUTPUT);
+  digitalWrite(NFC_SPI_CS, HIGH);
+  pinMode(NFC_SPI_MISO, INPUT);
+  pinMode(EPD_CS, OUTPUT);
+  digitalWrite(EPD_CS, HIGH);
+
   Wire.begin(NFC_SDA, NFC_SCL);
   Wire.setClock(400000);
-  nfcReady = nfcReader.PCD_Init();
-  if (nfcReady)
+
+  if (nfcI2cReader.PCD_Init())
   {
-    lastNfcStatus = "NFC 已就緒，請刷卡";
+    nfcReady = true;
+    activeNfcReader = &nfcI2cReader;
+    activeNfcBus = NfcBus::I2C;
+    lastNfcStatus = "NFC 已就緒，請刷卡（I2C）";
     Serial.println("NFC ready on I2C address 0x28");
+    return;
+  }
+
+  Serial.println("NFC I2C not detected, trying SPI...");
+#if RFID_DEBUG
+  printNfcSpiLineDiagnostics();
+#endif
+
+  // Keep the shared SPI bus on the pins used by the e-paper and the SPI RFID module.
+  SPI.begin(EPD_SCK, NFC_SPI_MISO, EPD_MOSI, NFC_SPI_CS);
+#if RFID_DEBUG
+  Serial.print("NFC SPI idle: MISO=");
+  Serial.print(digitalRead(NFC_SPI_MISO));
+  Serial.print(" SS=");
+  Serial.print(digitalRead(NFC_SPI_CS));
+  Serial.print(" RST=");
+  Serial.println(digitalRead(NFC_SPI_RST));
+#endif
+
+  // Some RC522 boards need a real reset edge before they answer over SPI.
+  digitalWrite(NFC_SPI_RST, LOW);
+  delay(10);
+  digitalWrite(NFC_SPI_RST, HIGH);
+  delay(50);
+#if RFID_DEBUG
+  printNfcSpiLineDiagnostics();
+
+  byte rawBeforeInit = readRc522SpiVersionRaw();
+  Serial.print("NFC SPI VersionReg before init: 0x");
+  if (rawBeforeInit < 0x10) Serial.print("0");
+  Serial.println(rawBeforeInit, HEX);
+#endif
+
+  if (nfcSpiReader.PCD_Init())
+  {
+    nfcReady = true;
+    activeNfcReader = &nfcSpiReader;
+    activeNfcBus = NfcBus::SPI;
+    lastNfcStatus = "NFC 已就緒，請刷卡（SPI）";
+    Serial.println("NFC ready on SPI");
+#if RFID_DEBUG
+    Serial.print("NFC SPI pins: SCK=");
+    Serial.print(EPD_SCK);
+    Serial.print(" MOSI=");
+    Serial.print(EPD_MOSI);
+    Serial.print(" MISO=");
+    Serial.print(NFC_SPI_MISO);
+    Serial.print(" SS=");
+    Serial.print(NFC_SPI_CS);
+    Serial.print(" RST=");
+    Serial.println(NFC_SPI_RST);
+#endif
   }
   else
   {
-    lastNfcStatus = "NFC 初始化失敗，請檢查 SDA=GPIO8 / SCL=GPIO9 / VCC / GND";
-    Serial.println("NFC init failed");
+#if RFID_DEBUG
+    byte spiVersion = readRc522SpiVersionRaw();
+    Serial.print("NFC SPI VersionReg after init: 0x");
+    if (spiVersion < 0x10) Serial.print("0");
+    Serial.println(spiVersion, HEX);
+#endif
+    lastNfcStatus = "NFC 初始化失敗，請檢查 I2C 或 SPI 接線";
+    Serial.println("NFC init failed on I2C and SPI");
   }
 }
 
@@ -389,15 +562,15 @@ void handleNfcCard(const String& uid)
 
 void pollNfc()
 {
-  if (!nfcReady || displayBusy) return;
+  if (!nfcReady || activeNfcReader == nullptr || displayBusy) return;
   if (millis() - lastNfcPollMs < NFC_POLL_MS) return;
   lastNfcPollMs = millis();
 
-  if (!nfcReader.PICC_IsNewCardPresent() || !nfcReader.PICC_ReadCardSerial()) return;
+  if (!activeNfcReader->PICC_IsNewCardPresent() || !activeNfcReader->PICC_ReadCardSerial()) return;
 
-  String uid = uidToString(nfcReader.uid);
-  nfcReader.PICC_HaltA();
-  nfcReader.PCD_StopCrypto1();
+  String uid = uidToString(activeNfcReader->uid);
+  activeNfcReader->PICC_HaltA();
+  activeNfcReader->PCD_StopCrypto1();
   handleNfcCard(uid);
 }
 
@@ -495,9 +668,9 @@ void showStatusScreen(const IPAddress& ip)
     display.fillScreen(GxEPD_WHITE);
     display.setTextColor(GxEPD_BLACK);
     display.setFont(&FreeMonoBold9pt7b);
-    drawCenteredText("WiFi: ICSLab", 48);
+    drawCenteredText(apModeActive ? "Setup AP" : (wifiStaConnected ? "WiFi connected" : "Network off"), 48);
     drawCenteredText(ip.toString().c_str(), 86);
-    drawCenteredText("Open epaper.local", 140);
+    drawCenteredText(apModeActive ? "Open 192.168.0.1" : "Open epaper.local", 140);
   } while (display.nextPage());
   display.powerOff();
   displayBusy = false;
@@ -794,9 +967,11 @@ void setupServer()
   {
     markActivity();
     String uid = sanitizeUid(lastNfcUid);
+    String bus = activeNfcBus == NfcBus::I2C ? "i2c" : (activeNfcBus == NfcBus::SPI ? "spi" : "none");
     String json = "{\"ready\":" + String(nfcReady ? "true" : "false") +
       ",\"uid\":\"" + uid + "\"" +
       ",\"bound\":" + String(bindingExists(uid) ? "true" : "false") +
+      ",\"bus\":\"" + bus + "\"" +
       ",\"status\":\"" + jsonEscape(lastNfcStatus) + "\"}";
     server.send(200, "application/json", json);
   });
@@ -1102,9 +1277,8 @@ void setup()
   pinMode(WAKE_BUTTON, INPUT_PULLUP);
   markActivity();
   setupFileSystem();
-  setupNfc();
 
-  SPI.begin(EPD_SCK, EPD_MISO, EPD_MOSI, EPD_CS);
+  SPI.begin(EPD_SCK, NFC_SPI_MISO, EPD_MOSI, EPD_CS);
   display.init(115200, true, 2, false);
 
   setupNetwork();
