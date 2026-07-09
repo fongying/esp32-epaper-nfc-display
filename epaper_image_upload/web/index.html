@@ -114,6 +114,31 @@
       align-items:center;
       justify-content:center;
     }
+    .battery-badge {
+      min-height:42px;
+      padding:8px 12px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:#f1fffa;
+      color:#075e54;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      font-size:13px;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .battery-badge.low {
+      border-color:rgba(209,15,31,.5);
+      background:#fff8f8;
+      color:var(--red);
+    }
+    .battery-badge.missing {
+      background:var(--cream);
+      color:var(--muted);
+      font-weight:700;
+    }
     .mode button { min-height:34px; border:0; padding:7px 10px; }
     .panel {
       border:1px solid var(--line);
@@ -315,6 +340,7 @@
       }
       .topbar { align-items:stretch; flex-direction:column; }
       .top-actions { display:grid; grid-template-columns:1fr; }
+      .battery-badge { width:100%; }
       .mode { width:100%; }
       .mode button { flex:1; }
       .panel { padding:12px; }
@@ -338,6 +364,7 @@
         <p>固定 400 x 300 畫布，完成後直接送到 http://epaper.local</p>
       </div>
       <div class="top-actions">
+        <div id="batteryBadge" class="battery-badge missing">電池讀取中</div>
         <a class="nav-link" href="/nfc">NFC 管理</a>
         <a class="nav-link" href="/config">設定</a>
         <div class="mode" aria-label="顯示模式">
@@ -487,6 +514,7 @@
     const bindNfcEl = document.getElementById('bindNfc');
     const refreshNfcEl = document.getElementById('refreshNfc');
     const updateTipEl = document.getElementById('updateTip');
+    const batteryBadgeEl = document.getElementById('batteryBadge');
     // 本機直接開啟 web/index.html 時，不會有 ESP32 的 /uid 與 /bind API；此旗標讓網頁仍可用來檢查排版。
     const localPreview = location.protocol === 'file:';
     const mockUpdate = localPreview || new URLSearchParams(location.search).has('mockUpdate');
@@ -519,10 +547,34 @@
       return 0;
     }
 
+    function formatBatteryVoltage(mv) {
+      return `${(mv / 1000).toFixed(2)}V`;
+    }
+
+    function batteryLabel(data) {
+      if (!data || !data.present) return '電池未偵測';
+      return `電池 ${data.percent}% · ${formatBatteryVoltage(data.mv)}`;
+    }
+
+    function renderBatteryBadge(data) {
+      batteryBadgeEl.textContent = batteryLabel(data);
+      batteryBadgeEl.classList.toggle('low', !!(data && data.low));
+      batteryBadgeEl.classList.toggle('missing', !(data && data.present));
+    }
+
+    async function loadBatteryStatus() {
+      if (localPreview) {
+        return { mv:3910, percent:82, present:true, low:false, otaAllowed:true };
+      }
+      const res = await fetch('/battery', { cache:'no-store' });
+      if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+      return res.json();
+    }
+
     async function loadCurrentVersion() {
       if (localPreview) {
         return {
-          version:'1.0.0',
+          version:'1.0.1',
           build:'local-preview',
           device:'esp32c3-epaper-nfc-display',
           staConnected:true,
@@ -537,7 +589,7 @@
     async function loadUpdateManifest(current) {
       if (mockUpdate) {
         return {
-          version:'1.1.0',
+          version:'1.0.2',
           build:'test-build',
           notes:'這是測試用的新版本提示，尚未執行 OTA。',
           firmware_url:''
@@ -553,6 +605,11 @@
     async function checkFirmwareUpdate() {
       try {
         const current = await loadCurrentVersion();
+        const battery = await loadBatteryStatus().catch(err => {
+          console.warn('battery check failed', err);
+          return null;
+        });
+        if (battery) renderBatteryBadge(battery);
         const manifest = await loadUpdateManifest(current);
         if (!manifest) {
           console.info('update check skipped: no manifest URL or Wi-Fi is not connected');
@@ -568,18 +625,24 @@
         }
 
         updateTipEl.hidden = false;
-        updateTipEl.textContent = `發現新版本 ${manifest.version}。${manifest.notes || ''}`;
+        updateTipEl.textContent = `發現新版本 ${manifest.version}。${manifest.notes || ''} ${battery ? batteryLabel(battery) : ''}`;
+        if (battery && battery.present && !battery.otaAllowed) {
+          setStatus('電量低於 20%，請充電後再更新。');
+          return;
+        }
         const updateMessage = [
           `發現新版本 ${manifest.version}`,
           `目前版本 ${current.version}`,
+          battery ? batteryLabel(battery) : '電池狀態讀取失敗，請確認供電穩定。',
           '',
           manifest.notes || '',
+          battery && !battery.present ? '未偵測到電池，請確認 USB 或外部供電穩定。' : '',
           '',
           '要更新嗎？'
-        ].join('\n');
+        ].filter(Boolean).join('\n');
         const ok = confirm(updateMessage);
         if (ok) {
-          await applyFirmwareUpdate(manifest);
+          await applyFirmwareUpdate(manifest, battery);
         } else {
           setStatus('已略過此次更新提示。');
         }
@@ -588,10 +651,14 @@
       }
     }
 
-    async function applyFirmwareUpdate(manifest) {
+    async function applyFirmwareUpdate(manifest, battery) {
       const firmwareUrl = manifest.firmware_url || manifest.firmwareUrl || '';
       if (!firmwareUrl) {
         setStatus('這個版本只有更新提示，manifest 尚未提供 firmware_url。');
+        return;
+      }
+      if (battery && battery.present && !battery.otaAllowed) {
+        setStatus('電量低於 20%，請充電後再更新。');
         return;
       }
 
@@ -1149,6 +1216,11 @@
     renderCanvas();
     updateProps();
     refreshNfcStatus();
+    loadBatteryStatus().then(renderBatteryBadge).catch(err => {
+      batteryBadgeEl.textContent = `電池讀取失敗`;
+      batteryBadgeEl.classList.add('missing');
+      console.warn('battery load failed', err);
+    });
     checkFirmwareUpdate();
   </script>
 </body>

@@ -1,8 +1,8 @@
 {
-  "device": "esp32c3-epaper-nfc-display",
-  "version": "1.0.0",
-  "build": "2026-06-19",
-  "notes": "V1.0.0 首次正式發布：支援三色電子紙設計器、NFC I2C/SPI 自動偵測、Wi-Fi 設定與 OTA 更新。",
-  "firmware_url": "https://github.com/fongying/esp32-epaper-nfc-display/releases/download/v1.0.0/epaper_image_upload-v1.0.0.bin",
-  "sha256": "67b666863d426aa49241ce9e2b450d649b1d36ada1a9559400c8d799584d5df7"
+    "device":  "esp32c3-epaper-nfc-display",
+    "version":  "1.0.1",
+    "build":  "2026-07-09",
+    "notes":  "V1.0.1 修正 ESP32-C3 Super Mini Wi-Fi 啟動穩定性，新增 GPIO2/A2 電池電壓讀取、低電量電子紙提示與 OTA 電量保護。",
+    "firmware_url":  "https://github.com/fongying/esp32-epaper-nfc-display/releases/download/v1.0.1/epaper_image_upload-v1.0.1.bin",
+    "sha256":  "876ceba14e2c0d0ba88bdb7ddd864aae5f7512bfb8659a18ce78f72c870a5d50"
 }

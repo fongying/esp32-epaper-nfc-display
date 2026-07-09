@@ -110,6 +110,17 @@ const char CONFIG_INDEX_HTML[] PROGMEM = R"HTML(
       line-height:1.25;
       overflow-wrap:anywhere;
     }
+    .status-card.low {
+      border-color:rgba(209,15,31,.42);
+      background:#fff8f8;
+    }
+    .status-card.low strong { color:var(--danger); }
+    .status-card small {
+      display:block;
+      margin-top:8px;
+      color:var(--muted);
+      line-height:1.5;
+    }
     label { display:grid; gap:7px; color:var(--muted); font-size:13px; }
     input {
       width:100%;
@@ -201,6 +212,11 @@ const char CONFIG_INDEX_HTML[] PROGMEM = R"HTML(
           <span>目前狀態</span>
           <strong id="wifiState">讀取中...</strong>
         </div>
+        <div class="status-card" id="batteryCard">
+          <span>電池狀態</span>
+          <strong id="batteryState">讀取中...</strong>
+          <small id="batteryHint">GPIO2 / A2，220kΩ / 220kΩ 分壓。</small>
+        </div>
         <form class="stack" id="wifiForm">
           <label>
             SSID
@@ -245,15 +261,56 @@ const char CONFIG_INDEX_HTML[] PROGMEM = R"HTML(
     const wifiScanEl = document.getElementById('wifiScan');
     const wifiNetworksEl = document.getElementById('wifiNetworks');
     const clearListEl = document.getElementById('clearList');
+    const batteryCardEl = document.getElementById('batteryCard');
+    const batteryStateEl = document.getElementById('batteryState');
+    const batteryHintEl = document.getElementById('batteryHint');
 
     function setMessage(text, isError = false) {
       wifiMessageEl.textContent = text;
       wifiMessageEl.classList.toggle('error', isError);
     }
 
+    function formatBatteryVoltage(mv) {
+      return `${(mv / 1000).toFixed(2)}V`;
+    }
+
+    function renderBatteryStatus(data) {
+      batteryCardEl.classList.toggle('low', !!(data && data.low));
+      if (!data || !data.present) {
+        batteryStateEl.textContent = '電池未偵測';
+        batteryHintEl.textContent = '未讀到有效電壓；若使用電池，請確認 GPIO2 分壓接線。未偵測時 OTA 仍允許，但請確認 USB 或外部供電穩定。';
+        return;
+      }
+
+      batteryStateEl.textContent = `${data.percent}% · ${formatBatteryVoltage(data.mv)}`;
+      if (data.low) {
+        batteryHintEl.textContent = '電量低於 20%，請充電後再進行線上更新。';
+      } else if (data.otaAllowed) {
+        batteryHintEl.textContent = '電量足夠，可進行線上更新。';
+      } else {
+        batteryHintEl.textContent = '目前電量不足以進行線上更新。';
+      }
+    }
+
+    async function loadBatteryStatus() {
+      if (localPreview) {
+        renderBatteryStatus({ mv:3910, percent:82, present:true, low:false, otaAllowed:true });
+        return;
+      }
+      try {
+        const res = await fetch('/battery', { cache:'no-store' });
+        if (!res.ok) throw new Error(await res.text() || `HTTP ${res.status}`);
+        renderBatteryStatus(await res.json());
+      } catch (err) {
+        batteryStateEl.textContent = '讀取失敗';
+        batteryHintEl.textContent = `無法讀取電池狀態：${err.message}`;
+        batteryCardEl.classList.add('low');
+      }
+    }
+
     async function loadWifiSettings() {
       if (localPreview) {
-        wifiSsidEl.value = 'ICSLab';
+        wifiSsidEl.value = 'Lab-WiFi';
         wifiStateEl.textContent = '本機預覽';
         setMessage('燒入 ESP32 後，此頁會讀取實際 Wi-Fi 狀態。');
         return;
@@ -305,7 +362,7 @@ const char CONFIG_INDEX_HTML[] PROGMEM = R"HTML(
     async function scanWifiNetworks() {
       if (localPreview) {
         renderWifiNetworks([
-          { ssid:'ICSLab', rssi:-42, secure:true },
+          { ssid:'Lab-WiFi', rssi:-42, secure:true },
           { ssid:'ESP32-Test', rssi:-68, secure:true }
         ]);
         setMessage('本機預覽：這是模擬掃描結果。');
@@ -373,6 +430,7 @@ const char CONFIG_INDEX_HTML[] PROGMEM = R"HTML(
     });
 
     loadWifiSettings();
+    loadBatteryStatus();
   </script>
 </body>
 </html>

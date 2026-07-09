@@ -26,8 +26,8 @@ static const char* DEFAULT_WIFI_PASSWORD = "";
 static const char* MDNS_NAME = "epaper";
 static const char* AP_SSID_PREFIX = "ESP32_e-paper_4.2V2_";
 static const char* FIRMWARE_DEVICE = "esp32c3-epaper-nfc-display";
-static const char* FIRMWARE_VERSION = "1.0.0";
-static const char* FIRMWARE_BUILD = "2026-06-19";
+static const char* FIRMWARE_VERSION = "1.0.1";
+static const char* FIRMWARE_BUILD = "2026-07-09";
 static const char* UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/fongying/esp32-epaper-nfc-display/main/firmware/manifest.json";
 static const IPAddress AP_IP(192, 168, 0, 1);
 static const IPAddress AP_GATEWAY(192, 168, 0, 1);
@@ -57,9 +57,25 @@ static constexpr uint8_t NFC_SPI_CS = 10;
 static constexpr uint8_t NFC_SPI_RST = 21;
 
 static constexpr uint8_t WAKE_BUTTON = 5;
+static constexpr uint8_t BATTERY_ADC_PIN = 2;
+static constexpr float BATTERY_DIVIDER_RATIO = 2.0f;
+static constexpr uint16_t BATTERY_EMPTY_MV = 3300;
+static constexpr uint16_t BATTERY_FULL_MV = 4200;
+static constexpr uint16_t BATTERY_PRESENT_MIN_MV = 500;
+static constexpr uint8_t LOW_BATTERY_PERCENT = 20;
+static constexpr uint8_t OTA_MIN_BATTERY_PERCENT = 20;
 static constexpr uint32_t SLEEP_TIMEOUT_MS = 5UL * 60UL * 1000UL;
 static constexpr uint32_t NFC_POLL_MS = 250;
 static constexpr uint32_t SAME_UID_REFRESH_GUARD_MS = 8000;
+
+struct BatteryStatus
+{
+  uint16_t mv;
+  uint8_t percent;
+  bool present;
+  bool low;
+  bool otaAllowed;
+};
 
 class MFRC522DriverSPIPinned : public MFRC522DriverSPI
 {
@@ -157,6 +173,46 @@ unsigned long restartAtMs = 0;
 void markActivity()
 {
   lastActivityMs = millis();
+}
+
+uint8_t batteryPercentFromMv(uint16_t mv)
+{
+  if (mv <= BATTERY_EMPTY_MV) return 0;
+  if (mv >= BATTERY_FULL_MV) return 100;
+  return (uint8_t)(((uint32_t)(mv - BATTERY_EMPTY_MV) * 100UL) / (BATTERY_FULL_MV - BATTERY_EMPTY_MV));
+}
+
+BatteryStatus readBatteryStatus()
+{
+  uint32_t sumMv = 0;
+  for (uint8_t i = 0; i < 16; i++)
+  {
+    sumMv += analogReadMilliVolts(BATTERY_ADC_PIN);
+    delay(2);
+  }
+
+  uint16_t batteryMv = (uint16_t)((sumMv / 16.0f) * BATTERY_DIVIDER_RATIO + 0.5f);
+  bool present = batteryMv >= BATTERY_PRESENT_MIN_MV;
+  uint8_t percent = present ? batteryPercentFromMv(batteryMv) : 0;
+
+  BatteryStatus status;
+  status.mv = present ? batteryMv : 0;
+  status.percent = percent;
+  status.present = present;
+  status.low = present && percent < LOW_BATTERY_PERCENT;
+  status.otaAllowed = !present || percent >= OTA_MIN_BATTERY_PERCENT;
+  return status;
+}
+
+String batteryStatusJson()
+{
+  BatteryStatus battery = readBatteryStatus();
+  String json = "{\"mv\":" + String(battery.mv) +
+    ",\"percent\":" + String(battery.percent) +
+    ",\"present\":" + String(battery.present ? "true" : "false") +
+    ",\"low\":" + String(battery.low ? "true" : "false") +
+    ",\"otaAllowed\":" + String(battery.otaAllowed ? "true" : "false") + "}";
+  return json;
 }
 
 String sanitizeUid(const String& uid)
@@ -657,9 +713,27 @@ void drawCenteredText(const char* text, int16_t y)
   display.print(text);
 }
 
+void drawLowBatteryIcon(bool useRed)
+{
+  const int16_t x = EPD_WIDTH - 42;
+  const int16_t y = 8;
+  const int16_t w = 30;
+  const int16_t h = 16;
+  uint16_t alertColor = useRed ? GxEPD_RED : GxEPD_BLACK;
+
+  display.fillRect(x - 2, y - 2, w + 8, h + 4, GxEPD_WHITE);
+  display.drawRect(x, y, w, h, GxEPD_BLACK);
+  display.fillRect(x + w, y + 5, 3, 6, GxEPD_BLACK);
+  display.fillRect(x + 3, y + 3, 6, h - 6, alertColor);
+  display.drawLine(x + 17, y + 3, x + 17, y + 9, alertColor);
+  display.drawPixel(x + 17, y + 12, alertColor);
+  display.drawPixel(x + 18, y + 12, alertColor);
+}
+
 void showStatusScreen(const IPAddress& ip)
 {
   displayBusy = true;
+  BatteryStatus battery = readBatteryStatus();
   display.setRotation(0);
   display.setFullWindow();
   display.firstPage();
@@ -671,6 +745,7 @@ void showStatusScreen(const IPAddress& ip)
     drawCenteredText(apModeActive ? "Setup AP" : (wifiStaConnected ? "WiFi connected" : "Network off"), 48);
     drawCenteredText(ip.toString().c_str(), 86);
     drawCenteredText(apModeActive ? "Open 192.168.0.1" : "Open epaper.local", 140);
+    if (battery.low) drawLowBatteryIcon(true);
   } while (display.nextPage());
   display.powerOff();
   displayBusy = false;
@@ -679,6 +754,7 @@ void showStatusScreen(const IPAddress& ip)
 void showUploadedImage()
 {
   displayBusy = true;
+  BatteryStatus battery = readBatteryStatus();
   display.setRotation(0);
   display.setFullWindow();
   display.firstPage();
@@ -690,6 +766,7 @@ void showUploadedImage()
     {
       display.drawBitmap(0, 0, redBuffer, EPD_WIDTH, EPD_HEIGHT, GxEPD_RED);
     }
+    if (battery.low) drawLowBatteryIcon(uploadHasRed);
   } while (display.nextPage());
   display.powerOff();
   displayBusy = false;
@@ -743,6 +820,7 @@ void startConfigAp()
   apSsid = makeApSsid();
   WiFi.mode(WIFI_AP_STA);
   WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
   WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
   WiFi.softAP(apSsid.c_str());
   dnsServer.start(DNS_PORT, "*", AP_IP);
@@ -854,6 +932,14 @@ bool isAllowedFirmwareUrl(const String& url)
 bool applyFirmwareUpdate(const String& firmwareUrl, const String& sha256)
 {
   (void)sha256;
+  BatteryStatus battery = readBatteryStatus();
+  if (battery.present && battery.percent < OTA_MIN_BATTERY_PERCENT)
+  {
+    Serial.print("OTA rejected: battery low ");
+    Serial.print(battery.percent);
+    Serial.println("%.");
+    return false;
+  }
   if (!wifiStaConnected)
   {
     Serial.println("OTA rejected: STA WiFi is not connected.");
@@ -901,6 +987,7 @@ void setupNetwork()
   loadWifiConfig();
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
 
   if (wifiSsid.length() == 0)
   {
@@ -994,12 +1081,24 @@ void setupServer()
     server.send(200, "application/json", json);
   });
 
+  server.on("/battery", HTTP_GET, []()
+  {
+    markActivity();
+    server.send(200, "application/json", batteryStatusJson());
+  });
+
   server.on("/update/apply", HTTP_POST, []()
   {
     markActivity();
     if (!wifiStaConnected)
     {
       server.send(409, "text/plain", "OTA requires STA WiFi with internet access.");
+      return;
+    }
+    BatteryStatus battery = readBatteryStatus();
+    if (battery.present && battery.percent < OTA_MIN_BATTERY_PERCENT)
+    {
+      server.send(409, "text/plain", "電量低於 20%，請充電後再更新。");
       return;
     }
 
@@ -1275,6 +1374,8 @@ void setup()
   Serial.println("ESP32-C3 E-Paper notice designer");
 
   pinMode(WAKE_BUTTON, INPUT_PULLUP);
+  pinMode(BATTERY_ADC_PIN, INPUT);
+  analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db);
   markActivity();
   setupFileSystem();
 
